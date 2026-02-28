@@ -1,0 +1,20 @@
+# Installazione: pip install -r requirements.txt
+
+# Deep Learning
+tensorflow
+
+# Elaborazione immagini
+opencv-python
+
+# Calcolo numerico
+numpy
+
+# Grafici
+matplotlib
+seaborn
+
+# Machine Learning / Metriche
+scikit-learn
+
+# Lettura file .mat (dataset EMNIST)
+scipy

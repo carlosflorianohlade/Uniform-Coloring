@@ -1,0 +1,13 @@
+# Dataset pesanti (MAI caricare questi su GitHub)
+dataset/
+*.mat
+*.zip
+*.tar.gz
+
+# Ambiente virtuale
+venv/
+venvUniformColoring/
+
+# Python cache
+__pycache__/
+*.pyc

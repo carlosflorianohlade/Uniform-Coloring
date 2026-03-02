@@ -13,7 +13,7 @@ import time
 # =============================================================================
 
 MODEL_PATH = 'cnn_coloring_project.keras'
-IMAGE_PATH = 'images/screenshot.png'
+IMAGE_PATH = 'images/immagine2.jpeg'
 
 # Mappa classi: indice output CNN -> lettera colore
 CLASS_MAP = {0: 'B', 1: 'G', 2: 'T', 3: 'Y'}
@@ -246,6 +246,7 @@ def execute(name: str, algorithm: Callable, problem: Problem, *args, **kwargs) -
         print()
 
     print(f"{GREEN}Time:{RESET} {end - start:.4f} s")
+    return sol
 
 
 # =============================================================================
@@ -379,6 +380,27 @@ class UniformColoring(Problem):
         h_paint = min(cost_B, cost_Y, cost_G)
 
         return h_dist + h_paint
+    
+def print_simulation_simple(problem, goal_node):
+    if not goal_node:
+        print("Nessuna soluzione da simulare.")
+        return  
+    # Recupera l'intera sequenza di nodi (dallo stato iniziale al goal)
+    path = goal_node.path() 
+    print("\n=== SIMULAZIONE ESECUZIONE PASSO-PASSO ===")
+    for step, node in enumerate(path):
+        action = node.action if node.action else "Stato Iniziale"
+        print(f"\nStep {step}: {action}")   
+        # Estraiamo e stampiamo la griglia
+        grid = node.state.grid
+        for r in range(problem.rows):
+            # Prendiamo la riga corrente
+            row_cells = grid[r * problem.cols : (r + 1) * problem.cols]
+            # Sostituiamo 'None' con un trattino per renderla più leggibile
+            row_display = ['-' if c == 'None' else c for c in row_cells]
+            print("  " + " | ".join(row_display))
+        time.sleep(0.5) # Piccola pausa per far scorrere le griglie in modo leggibile
+    print("\n=== FINE SIMULAZIONE ===")
 
 
 # =============================================================================
@@ -392,7 +414,7 @@ except Exception as e:
     print(f"[ERRORE] Caricamento modello: {e}")
     exit()
 
-vision_result = extract_grid_to_matrix(IMAGE_PATH, loaded_model, verbose=True)
+vision_result = extract_grid_to_matrix(IMAGE_PATH, loaded_model, verbose=False)
 
 if vision_result:
     grid_initial, detected_rows, detected_cols = vision_result
@@ -411,13 +433,22 @@ if vision_result:
     problem = UniformColoring(grid_initial, detected_rows, detected_cols)
 
     print("=" * 60)
-    execute("Uniform Cost Search (UCS)", ucs, problem)
+    risultato_ucs = execute("Uniform Cost Search (UCS)", ucs, problem)
+    # Avviamo la simulazione passando il nodo finale
+    if risultato_ucs:
+        print_simulation_simple(problem, risultato_ucs)
 
     print("=" * 60)
-    execute("Greedy Best First Search", greedy, problem, h=problem.h_combined_cost)
+    risultato_greedy = execute("Greedy Best First Search", greedy, problem, h=problem.h_combined_cost)
+    # Avviamo la simulazione passando il nodo finale
+    if risultato_greedy:
+        print_simulation_simple(problem, risultato_greedy)
 
     print("=" * 60)
-    execute("A* Search", astar, problem, h=problem.h_combined_cost)
+    risultato_astar = execute("A* Search", astar, problem, h=problem.h_combined_cost)
+    # Avviamo la simulazione passando il nodo finale
+    if risultato_astar:
+        print_simulation_simple(problem, risultato_astar)
 
 else:
     print(f"{RED}[ERRORE] Analisi immagine fallita o griglia non rilevata.{RESET}")

@@ -7,6 +7,7 @@ from collections.abc import Callable
 import os
 import matplotlib.pyplot as plt
 import time
+import imageio.v2 as imageio
 
 # =============================================================================
 # CONFIGURAZIONE
@@ -380,27 +381,68 @@ class UniformColoring(Problem):
         h_paint = min(cost_B, cost_Y, cost_G)
 
         return h_dist + h_paint
-    
-def print_simulation_simple(problem, goal_node):
+
+def generate_gif_simulation(problem, goal_node, output_filename="simulazione_soluzione.gif"):
+    """
+    Genera una GIF animata che simula il piano di azioni passo dopo passo,
+    salvandola nella cartella 'images'.
+    """
     if not goal_node:
-        print("Nessuna soluzione da simulare.")
-        return  
-    # Recupera l'intera sequenza di nodi (dallo stato iniziale al goal)
-    path = goal_node.path() 
-    print("\n=== SIMULAZIONE ESECUZIONE PASSO-PASSO ===")
-    for step, node in enumerate(path):
-        action = node.action if node.action else "Stato Iniziale"
-        print(f"\nStep {step}: {action}")   
-        # Estraiamo e stampiamo la griglia
-        grid = node.state.grid
-        for r in range(problem.rows):
-            # Prendiamo la riga corrente
-            row_cells = grid[r * problem.cols : (r + 1) * problem.cols]
-            # Sostituiamo 'None' con un trattino per renderla più leggibile
-            row_display = ['-' if c == 'None' else c for c in row_cells]
-            print("  " + " | ".join(row_display))
-        time.sleep(0.5) # Piccola pausa per far scorrere le griglie in modo leggibile
-    print("\n=== FINE SIMULAZIONE ===")
+        print("\n[SIMULATORE] Nessuna soluzione da simulare.")
+        return
+
+    print(f"\n[SIMULATORE] Generazione della GIF animata in corso...")
+    
+    # Crea la directory di output se non esiste
+    output_dir = 'gif'
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Recupera il percorso completo dei nodi (dallo start al goal)
+    path = goal_node.path()
+    images = []
+
+    for idx, node in enumerate(path):
+        action = node.action
+        grid_1d = node.state.grid
+        
+        # Converte la griglia 1D in una matrice 2D per matplotlib
+        table_data = [
+            list(grid_1d[r * problem.cols : (r + 1) * problem.cols]) 
+            for r in range(problem.rows)
+        ]
+        
+        # Dinamizza la dimensione della figura in base alle colonne/righe
+        fig, ax = plt.subplots(figsize=(problem.cols * 1.5, problem.rows * 1.5))
+        ax.axis('off')
+        
+        # Disegna la tabella della griglia
+        table = ax.table(cellText=table_data, loc='center', cellLoc='center')
+        table.scale(1, 2) # Aumenta l'altezza delle celle per renderle quadrate
+        table.set_fontsize(20)
+
+        for (row, col), cell in table.get_celld().items():
+            if cell.get_text().get_text() == 'T':
+                cell.get_text().set_color('red') 
+        
+        # Aggiungi il nome dell'azione in basso
+        label = f"Azione: {action}" if action else "Stato iniziale"
+        plt.figtext(0.5, 0.05, label, ha='center', fontsize=16, fontweight='bold')
+            
+        plt.tight_layout()
+        
+        # Salva in PNG temporaneo
+        fname = os.path.join(output_dir, f'_sim_grid_{idx}.png')
+        plt.savefig(fname, bbox_inches='tight', pad_inches=0.1)
+        plt.close(fig)
+        
+        # Leggi l'immagine temporanea e aggiungila alla lista
+        images.append(imageio.imread(fname))
+        os.remove(fname) # Pulizia file temporaneo
+
+    # Salva la GIF
+    gif_path = os.path.join(output_dir, output_filename)
+    imageio.mimsave(gif_path, images, format='GIF', fps=1) # fps=2 per mezzo secondo a frame
+    print(f"[SIMULATORE] GIF generata con successo! Salvata in: {gif_path}")
 
 
 # =============================================================================
@@ -436,19 +478,19 @@ if vision_result:
     risultato_ucs = execute("Uniform Cost Search (UCS)", ucs, problem)
     # Avviamo la simulazione passando il nodo finale
     if risultato_ucs:
-        print_simulation_simple(problem, risultato_ucs)
+        generate_gif_simulation(problem, risultato_ucs, output_filename="simulazione_ucs.gif")
 
     print("=" * 60)
     risultato_greedy = execute("Greedy Best First Search", greedy, problem, h=problem.h_combined_cost)
     # Avviamo la simulazione passando il nodo finale
     if risultato_greedy:
-        print_simulation_simple(problem, risultato_greedy)
+        generate_gif_simulation(problem, risultato_greedy, output_filename="simulazione_greedy.gif")
 
     print("=" * 60)
     risultato_astar = execute("A* Search", astar, problem, h=problem.h_combined_cost)
     # Avviamo la simulazione passando il nodo finale
     if risultato_astar:
-        print_simulation_simple(problem, risultato_astar)
+        generate_gif_simulation(problem, risultato_astar, output_filename="simulazione_astar.gif")
 
 else:
     print(f"{RED}[ERRORE] Analisi immagine fallita o griglia non rilevata.{RESET}")

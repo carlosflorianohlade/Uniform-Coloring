@@ -13,7 +13,7 @@ import time
 # =============================================================================
 
 MODEL_PATH = 'cnn_coloring_project.keras'
-IMAGE_PATH = 'images/city.jpeg'
+IMAGE_PATH = 'images/screenshot.png'
 
 # Mappa classi: indice output CNN -> lettera colore
 CLASS_MAP = {0: 'B', 1: 'G', 2: 'T', 3: 'Y'}
@@ -287,6 +287,10 @@ class UniformColoring(Problem):
         self.cols = cols
         self.start_pos = initial_grid.index('T')
 
+        total_cells = self.rows * self.cols
+        self.X = tuple(i // self.cols for i in range(total_cells))
+        self.Y = tuple(i % self.cols for i in range(total_cells))
+
         initial_state = ColoringState(initial_grid, 'None', self.start_pos)
         super().__init__(initial_state, goal=None)
 
@@ -351,34 +355,30 @@ class UniformColoring(Problem):
         return len(visible) == 1
 
     def h_combined_cost(self, node: Node) -> int:
-        """
-        Euristica ammissibile: h(n) = h_dist(n) + h_paint(n)
-
-        - h_dist: distanza di Manhattan dalla posizione attuale alla start_pos.
-          L'agente DEVE percorrere almeno questa distanza -> ammissibile.
-
-        - h_paint: costo minimo teorico per uniformare tutte le celle visibili,
-          ignorando i costi di movimento -> lower bound -> ammissibile.
-          Calcolato come min(costo_totale_vernice_B, ..._Y, ..._G).
-        """
         state = node.state
         t = state.t_pos
+        s = self.start_pos
 
         # h_dist
-        cr, cc = divmod(t, self.cols)
-        sr, sc = divmod(self.start_pos, self.cols)
-        h_dist = abs(cr - sr) + abs(cc - sc)
+        h_dist = abs(self.X[t] - self.X[s]) + abs(self.Y[t] - self.Y[s])
 
         # h_paint
-        visible = [c for c in state.grid if c != 'T']
+        # 1. Prendi tutti i colori reali nella griglia (escludi la testina e la start_pos vuota)
+        visible = [c for c in state.grid if c not in ('T', 'None')]
+        
+        # 2. Aggiungi il colore attualmente coperto dalla testina (se non è vuoto)
+        if state.held_color != 'None':
+            visible.append(state.held_color)
+
         if not visible:
             return h_dist
 
         cost_B = sum(COSTS['COL-B'] for c in visible if c != 'B')
         cost_Y = sum(COSTS['COL-Y'] for c in visible if c != 'Y')
         cost_G = sum(COSTS['COL-G'] for c in visible if c != 'G')
+        h_paint = min(cost_B, cost_Y, cost_G)
 
-        return h_dist + min(cost_B, cost_Y, cost_G)
+        return h_dist + h_paint
 
 
 # =============================================================================

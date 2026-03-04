@@ -9,20 +9,12 @@ import matplotlib.pyplot as plt
 import time
 import imageio.v2 as imageio
 
-# =============================================================================
-# CONFIGURAZIONE
-# =============================================================================
-
 MODEL_PATH = 'cnn_coloring_project.keras'
 IMAGE_PATH = 'images/immagine2.jpeg'
-
-# Mappa classi: indice output CNN -> lettera colore
 CLASS_MAP = {0: 'B', 1: 'G', 2: 'T', 3: 'Y'}
 
-# =============================================================================
-# LOGICA DI VISIONE
-# =============================================================================
 
+#LOGICA DI VISIONE
 def cluster_positions(positions, threshold=10):
     """Raggruppa coordinate vicine per evitare doppie righe o colonne."""
     clustered = []
@@ -42,7 +34,6 @@ def auto_crop_cell(img_array):
 
     # Binarizzazione con Otsu invertita (lettera nera su bianco -> bianca su nero)
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # se non ci sono contorni, restituiamo l'immagine binarizzata ridimensionata
@@ -126,7 +117,7 @@ def extract_grid_to_matrix(image_path, model, verbose=False):
 
     print(f"[INFO] Griglia rilevata: {detected_rows}x{detected_cols} ({detected_rows * detected_cols} celle)")
 
-    # batch prediction invece di predict cella per cella
+    # batch prediction
     cells_batch = []
     for r in range(detected_rows):
         for c in range(detected_cols):
@@ -143,7 +134,6 @@ def extract_grid_to_matrix(image_path, model, verbose=False):
     predictions = model.predict(batch_array, verbose=0)  # shape: (N, 4)
     pred_labels = [CLASS_MAP.get(np.argmax(p), '?') for p in predictions]
 
-    # Verbose: mostra ogni cella con la sua predizione
     if verbose:
         idx = 0
         for r in range(detected_rows):
@@ -162,10 +152,7 @@ def extract_grid_to_matrix(image_path, model, verbose=False):
     return tuple(pred_labels), detected_rows, detected_cols
 
 
-# =============================================================================
-# LOGICA DI RICERCA - COLORI TERMINAL
-# =============================================================================
-
+# AIMA
 BLUE  = "\033[34;1m"
 RED   = "\033[31;1m"
 GREEN = "\033[32;1m"
@@ -250,10 +237,7 @@ def execute(name: str, algorithm: Callable, problem: Problem, *args, **kwargs) -
     return sol
 
 
-# =============================================================================
-# DOMINIO: UNIFORM COLORING
-# =============================================================================
-
+#Uniform Coring
 COSTS = {
     'N': 1, 'S': 1, 'W': 1, 'E': 1,
     'COL-B': 1, 'COL-Y': 2, 'COL-G': 3
@@ -263,8 +247,6 @@ COSTS = {
 class ColoringState:
     """
     Stato del dominio Uniform Coloring.
-    - grid: tupla con i colori delle celle (la posizione della testina è 'T')
-    - held_color: colore "nascosto" sotto la testina
     """
 
     def __init__(self, grid: tuple, held_color: str, t_pos: int) -> None:
@@ -279,7 +261,6 @@ class ColoringState:
         return self.grid == other.grid and self.held_color == other.held_color
 
     def __lt__(self, other):
-        # Necessario per PriorityQueue quando due nodi hanno stesso f(n)
         return self.grid < other.grid
 
 
@@ -306,7 +287,7 @@ class UniformColoring(Problem):
         if t % self.cols != 0: possible.append('W')
         if t % self.cols != self.cols - 1: possible.append('E')
 
-        # Colorazioni (solo se non siamo sulla start_pos)
+        # Colorazioni
         if t != self.start_pos:
             if state.held_color != 'B': possible.append('COL-B')
             if state.held_color != 'Y': possible.append('COL-Y')
@@ -324,10 +305,8 @@ class UniformColoring(Problem):
             delta = {'N': -self.cols, 'S': self.cols, 'W': -1, 'E': 1}
             neighbor = t + delta[action]
 
-            # Se la T lascia la start_pos, quella cella rimane senza colore ('None')
-            # altrimenti ripristina il colore che stava nascondendo
             new_grid[t] = 'None' if t == self.start_pos else state.held_color
-            new_held = new_grid[neighbor]  # salva colore della cella destinazione
+            new_held = new_grid[neighbor]
             new_grid[neighbor] = 'T'
             new_t = neighbor
 
@@ -340,16 +319,6 @@ class UniformColoring(Problem):
         return c + COSTS[action]
 
     def goal_test(self, state: ColoringState) -> bool:
-        """
-        Goal:
-          1. La testina è tornata alla posizione iniziale (start_pos).
-          2. Tutte le celle visibili (≠ 'T') hanno lo stesso colore.
-        
-        Nota: la start_pos non ha un colore proprio per definizione del dominio,
-        quindi held_color = 'None' al ritorno è sempre uno stato valido.
-        Non è necessario verificare held_color perché la testina non colora
-        mai la propria casella di partenza (vedi actions()).
-        """
         if state.t_pos != self.start_pos:
             return False
     
@@ -365,10 +334,8 @@ class UniformColoring(Problem):
         h_dist = abs(self.X[t] - self.X[s]) + abs(self.Y[t] - self.Y[s])
 
         # h_paint
-        # 1. Prendi tutti i colori reali nella griglia (escludi la testina e la start_pos vuota)
         visible = [c for c in state.grid if c not in ('T', 'None')]
         
-        # 2. Aggiungi il colore attualmente coperto dalla testina (se non è vuoto)
         if state.held_color != 'None':
             visible.append(state.held_color)
 
@@ -382,22 +349,17 @@ class UniformColoring(Problem):
 
         return h_dist + h_paint
 
-def generate_gif_simulation(problem, goal_node, output_filename="simulazione_soluzione.gif"):
-    """
-    Genera una GIF animata che simula il piano di azioni passo dopo passo,
-    salvandola nella cartella 'images'.
-    """
+def generate_gif_simulation(problem, goal_node, output_filename):
     if not goal_node:
         print("\n[SIMULATORE] Nessuna soluzione da simulare.")
         return
 
     print(f"\n[SIMULATORE] Generazione della GIF animata in corso...")
     
-    # Crea la directory di output se non esiste
+    
     output_dir = 'gif'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Recupera il percorso completo dei nodi (dallo start al goal)
     path = goal_node.path()
     images = []
 
@@ -412,27 +374,28 @@ def generate_gif_simulation(problem, goal_node, output_filename="simulazione_sol
         ]
         
         # Dinamizza la dimensione della figura in base alle colonne/righe
-        fig, ax = plt.subplots(figsize=(problem.cols * 1.5, problem.rows * 1.5))
+        fig, ax = plt.subplots(figsize=(problem.cols * 3, problem.rows * 2))
         ax.axis('off')
         
         # Disegna la tabella della griglia
         table = ax.table(cellText=table_data, loc='center', cellLoc='center')
-        table.scale(1, 2) # Aumenta l'altezza delle celle per renderle quadrate
+        table.scale(2, 4) # Aumenta l'altezza delle celle per renderle quadrate
         table.set_fontsize(20)
 
         for (row, col), cell in table.get_celld().items():
             if cell.get_text().get_text() == 'T':
-                cell.get_text().set_color('red') 
+                cell.get_text().set_color('red')
+                cell.get_text().set_fontweight('bold') 
         
         # Aggiungi il nome dell'azione in basso
         label = f"Azione: {action}" if action else "Stato iniziale"
-        plt.figtext(0.5, 0.05, label, ha='center', fontsize=16, fontweight='bold')
-            
+        plt.figtext(0.5, 0.15, label, ha='center', fontsize=20, fontweight='bold',).set_color('red')
+        
         plt.tight_layout()
         
         # Salva in PNG temporaneo
         fname = os.path.join(output_dir, f'_sim_grid_{idx}.png')
-        plt.savefig(fname, bbox_inches='tight', pad_inches=0.1)
+        plt.savefig(fname, bbox_inches='tight', pad_inches=0.2)
         plt.close(fig)
         
         # Leggi l'immagine temporanea e aggiungila alla lista
@@ -441,56 +404,51 @@ def generate_gif_simulation(problem, goal_node, output_filename="simulazione_sol
 
     # Salva la GIF
     gif_path = os.path.join(output_dir, output_filename)
-    imageio.mimsave(gif_path, images, format='GIF', fps=1) # fps=2 per mezzo secondo a frame
+    imageio.mimsave(gif_path, images, format='GIF', fps=1)
     print(f"[SIMULATORE] GIF generata con successo! Salvata in: {gif_path}")
 
-
-# =============================================================================
-# MAIN
-# =============================================================================
-
-try:
-    loaded_model = tf.keras.models.load_model(MODEL_PATH)
-    print(f"[INFO] Modello '{MODEL_PATH}' caricato con successo.")
-except Exception as e:
-    print(f"[ERRORE] Caricamento modello: {e}")
-    exit()
-
-vision_result = extract_grid_to_matrix(IMAGE_PATH, loaded_model, verbose=False)
-
-if vision_result:
-    grid_initial, detected_rows, detected_cols = vision_result
-
-    print(f"\n{BLUE}=== GRIGLIA INIZIALE RILEVATA ({detected_rows}x{detected_cols}) ==={RESET}")
-    for r in range(detected_rows):
-        print(grid_initial[r * detected_cols: (r + 1) * detected_cols])
-    print()
-
-    # FIX: controllo che 'T' sia presente nella griglia prima di creare il problema
-    if 'T' not in grid_initial:
-        print(f"{RED}[ERRORE] Nessuna 'T' (Testina) rilevata nella griglia. "
-              f"Controlla le predizioni CNN o l'immagine.{RESET}")
+def main():
+    try:
+        loaded_model = tf.keras.models.load_model(MODEL_PATH)
+        print(f"[INFO] Modello '{MODEL_PATH}' caricato con successo.")
+    except Exception as e:
+        print(f"[ERRORE] Caricamento modello: {e}")
         exit()
 
-    problem = UniformColoring(grid_initial, detected_rows, detected_cols)
+    vision_result = extract_grid_to_matrix(IMAGE_PATH, loaded_model, verbose=False)
 
-    print("=" * 60)
-    risultato_ucs = execute("Uniform Cost Search (UCS)", ucs, problem)
-    # Avviamo la simulazione passando il nodo finale
-    if risultato_ucs:
-        generate_gif_simulation(problem, risultato_ucs, output_filename="simulazione_ucs.gif")
+    if vision_result:
+        grid_initial, detected_rows, detected_cols = vision_result
 
-    print("=" * 60)
-    risultato_greedy = execute("Greedy Best First Search", greedy, problem, h=problem.h_combined_cost)
-    # Avviamo la simulazione passando il nodo finale
-    if risultato_greedy:
-        generate_gif_simulation(problem, risultato_greedy, output_filename="simulazione_greedy.gif")
+        print(f"\n{BLUE}=== GRIGLIA INIZIALE RILEVATA ({detected_rows}x{detected_cols}) ==={RESET}")
+        for r in range(detected_rows):
+            print(grid_initial[r * detected_cols: (r + 1) * detected_cols])
+        print()
 
-    print("=" * 60)
-    risultato_astar = execute("A* Search", astar, problem, h=problem.h_combined_cost)
-    # Avviamo la simulazione passando il nodo finale
-    if risultato_astar:
-        generate_gif_simulation(problem, risultato_astar, output_filename="simulazione_astar.gif")
+        if 'T' not in grid_initial:
+            print(f"{RED}[ERRORE] Nessuna 'T' (Testina) rilevata nella griglia. "
+                  f"Controlla le predizioni CNN o l'immagine.{RESET}")
+            exit()
 
-else:
-    print(f"{RED}[ERRORE] Analisi immagine fallita o griglia non rilevata.{RESET}")
+        problem = UniformColoring(grid_initial, detected_rows, detected_cols)
+
+        print("=" * 60)
+        risultato_ucs = execute("Uniform Cost Search (UCS)", ucs, problem)
+        if risultato_ucs:
+            generate_gif_simulation(problem, risultato_ucs, output_filename="simulazione_ucs.gif")
+
+        print("=" * 60)
+        risultato_greedy = execute("Greedy Best First Search", greedy, problem, h=problem.h_combined_cost)
+        if risultato_greedy:
+            generate_gif_simulation(problem, risultato_greedy, output_filename="simulazione_greedy.gif")
+
+        print("=" * 60)
+        risultato_astar = execute("A* Search", astar, problem, h=problem.h_combined_cost)
+        if risultato_astar:
+            generate_gif_simulation(problem, risultato_astar, output_filename="simulazione_astar.gif")
+
+    else:
+        print(f"{RED}[ERRORE] Analisi immagine fallita o griglia non rilevata.{RESET}")
+
+if __name__ == "__main__":
+    main()

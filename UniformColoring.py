@@ -391,6 +391,12 @@ def generate_gif_simulation(problem, goal_node, output_filename):
         label = f"Azione: {action}" if action else "Stato iniziale"
         plt.figtext(0.5, 0.15, label, ha='center', fontsize=20, fontweight='bold',).set_color('red')
         
+        # Aggiungi il nome dell'algoritmo utilizzato
+        alg_label = output_filename
+        alg_label = alg_label.replace('_', ' ').removesuffix(".gif").upper()
+        
+        plt.figtext(0.5, 0.8, alg_label, ha='center', fontsize=20, fontweight='bold',).set_color('red')
+
         plt.tight_layout()
         
         # Salva in PNG temporaneo
